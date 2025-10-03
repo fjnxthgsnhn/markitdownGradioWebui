@@ -180,6 +180,38 @@ def transcribe_audio(file_path, audio_format):
     except Exception as e:
         return f"音声文字起こし中にエラーが発生しました: {e}"
 
+def process_docx_images(markdown_content, file_basename, output_files):
+    """DOCXファイルから抽出された画像を適切に処理する"""
+    # DOCXファイルから抽出されたBase64エンコードされた画像を検出するパターン
+    # 長いBase64文字列を検出（通常のBase64画像とは異なる形式）
+    docx_base64_pattern = re.compile(r"!\[.*?\]\((data:.*?;base64,([A-Za-z0-9+/]{100,}={0,2}))\)")
+    
+    processed_content = markdown_content
+    image_counter = 0
+    
+    # Base64エンコードされた画像を検出して処理
+    for match in docx_base64_pattern.finditer(markdown_content):
+        data_uri = match.group(1)
+        base64_data = match.group(2)
+        
+        try:
+            # Base64データをデコード
+            image_data = base64.b64decode(base64_data)
+            
+            # 画像形式を判定（PNGとして保存）
+            image_filename = f"{file_basename}_image_{image_counter}.png"
+            output_files[image_filename] = image_data
+            
+            # Markdown内のBase64データをファイル参照に置換
+            processed_content = processed_content.replace(data_uri, image_filename)
+            image_counter += 1
+            
+        except Exception as e:
+            print(f"DOCX画像処理エラー: {e}")
+            # エラーが発生した場合は元のBase64データを保持
+    
+    return processed_content
+
 def convert_and_zip(file_obj, url_input, gemini_api_key, selected_model):
     markdown_content = ""
     output_files = {} # filename: content (bytes)
@@ -250,6 +282,11 @@ def convert_and_zip(file_obj, url_input, gemini_api_key, selected_model):
                 try:
                     result = md.convert(file_path, keep_data_uris=True)
                     markdown_content = result.text_content
+                    
+                    # DOCXファイルの場合、画像を適切に処理
+                    if file_extension in ['.docx', '.doc']:
+                        markdown_content = process_docx_images(markdown_content, file_basename, output_files)
+                        
                 except Exception as e:
                     error_msg = f"ファイル変換エラー: {e}\n"
                     if "API key" in str(e) or "authentication" in str(e).lower():
@@ -258,12 +295,16 @@ def convert_and_zip(file_obj, url_input, gemini_api_key, selected_model):
                         md_normal = MarkItDown(enable_plugins=False)
                         result = md_normal.convert(file_path, keep_data_uris=True)
                         markdown_content = error_msg + result.text_content
+                        if file_extension in ['.docx', '.doc']:
+                            markdown_content = process_docx_images(markdown_content, file_basename, output_files)
                     elif "quota" in str(e).lower() or "rate limit" in str(e).lower():
                         error_msg += "Google Gemini APIの利用制限に達しました。通常の変換を試みます。\n"
                         # 通常のMarkItDownで再試行
                         md_normal = MarkItDown(enable_plugins=False)
                         result = md_normal.convert(file_path, keep_data_uris=True)
                         markdown_content = error_msg + result.text_content
+                        if file_extension in ['.docx', '.doc']:
+                            markdown_content = process_docx_images(markdown_content, file_basename, output_files)
                     else:
                         markdown_content = error_msg + "変換に失敗しました。"
             
