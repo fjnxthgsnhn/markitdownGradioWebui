@@ -4,6 +4,9 @@
 ![PyPI - Downloads](https://img.shields.io/pypi/dd/markitdown)
 [![Built by AutoGen Team](https://img.shields.io/badge/Built%20by-AutoGen%20Team-blue)](https://github.com/microsoft/autogen)
 
+> [!NOTE]
+> **Web UIの利用**: ブラウザベースの直感的なインターフェースを利用する場合は [WEBUI_README_ja.md](./WEBUI_README_ja.md) を参照してください。
+
 > [!TIP]
 > MarkItDown now offers an MCP (Model Context Protocol) server for integration with LLM applications like Claude Desktop. See [markitdown-mcp](https://github.com/microsoft/markitdown/tree/main/packages/markitdown-mcp) for more information.
 
