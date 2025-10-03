@@ -47,11 +47,20 @@ echo 仮想環境が正常に有効化されました
 echo.
 
 echo Pythonパッケージの依存関係を確認しています...
-python -c "import gradio, markitdown" >nul 2>&1
+python -c "import gradio, markitdown, fitz, PIL, requests, magic" >nul 2>&1
 if %ERRORLEVEL% neq 0 (
     echo 必要なパッケージがインストールされていません
     echo インストールを開始します...
-    pip install gradio markitdown pymupdf requests
+    
+    REM requirements.txtが存在する場合はそれを使用
+    if exist "requirements.txt" (
+        echo requirements.txtを使用して依存関係をインストールします...
+        pip install -r requirements.txt
+    ) else (
+        echo 個別にパッケージをインストールします...
+        pip install gradio markitdown[all] pymupdf Pillow requests python-magic
+    )
+    
     if %ERRORLEVEL% neq 0 (
         echo [エラー] パッケージのインストールに失敗しました
         pause

@@ -1,0 +1,23 @@
+# MarkItDown Web UI 依存関係
+
+# コア依存関係
+markitdown[all]
+gradio
+
+# PDF処理
+pymupdf
+
+# 画像処理
+Pillow
+
+# HTTPリクエスト
+requests
+
+# ファイル処理
+python-magic
+
+# オーディオ処理（オプション）
+pydub
+
+# 開発用ツール（オプション）
+streamlit

@@ -2,16 +2,6 @@
 
 MarkItDownプロジェクトのWebベースユーザーインターフェーススクリプトです。ブラウザから直感的にファイル変換を行うことができます。
 
-## 利用可能なWeb UIスクリプト
-
-- `webui.py` - 最新の安定版Web UI
-- `webui_v1.py` - バージョン1
-- `webui_v2.py` - バージョン2  
-- `webui_v3.py` - バージョン3
-- `webui_v4.py` - バージョン4
-- `webui_v5.py` - バージョン5
-- `webui_v6_stable.py` - バージョン6（安定版）
-
 ## 使用方法
 
 ### Windowsでの実行
@@ -50,15 +40,36 @@ python webui.py
 ## 必要条件
 
 - Python 3.10以上
-- 必要なPythonパッケージ：
-  ```bash
-  pip install 'markitdown[all]'
-  pip install streamlit
-  ```
+
+## インストール方法
+
+### 方法1: requirements.txtを使用（推奨）
+```bash
+pip install -r requirements.txt
+```
+
+### 方法2: 個別インストール
+```bash
+pip install 'markitdown[all]' gradio pymupdf Pillow requests python-magic
+```
+
+### 仮想環境でのインストール（推奨）
+```bash
+# 仮想環境の作成
+python -m venv venv
+
+# Windows
+venv\Scripts\activate
+
+# macOS/Linux
+source venv/bin/activate
+
+# 依存関係のインストール
+pip install -r requirements.txt
+```
 
 ## 注意事項
 
-- `venv/` フォルダと `old/` フォルダはGitリポジトリに含まれていません
 - 大容量ファイルの変換には時間がかかる場合があります
 - 変換品質は元ファイルの構造と内容に依存します
 
