@@ -81,13 +81,18 @@ def convert_and_zip(file_obj, url_input, openai_api_key):
     if file_obj and file_extension in ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp'] and openai_api_key:
         try:
             from openai import OpenAI
+            from openai import AuthenticationError
             client = OpenAI(api_key=openai_api_key)
             md = MarkItDown(llm_client=client, llm_model="gpt-4o", enable_plugins=False)
             warning_message = "LLMを使用して画像の説明を生成します...\n\n"
         except ImportError:
             warning_message = "OpenAIパッケージがインストールされていません。通常の変換を行います。\n\n"
+        except AuthenticationError:
+            warning_message = "OpenAI APIキーが無効です。通常の変換を行います。\n\n"
+            md = MarkItDown(enable_plugins=False)
         except Exception as e:
             warning_message = f"LLMの初期化に失敗しました: {e}。通常の変換を行います。\n\n"
+            md = MarkItDown(enable_plugins=False)
 
     if file_obj:
         # Handle file upload
@@ -101,8 +106,19 @@ def convert_and_zip(file_obj, url_input, openai_api_key):
             pdf_images = extract_page_images_from_pdf(file_path)
         
         # Convert to markdown
-        result = md.convert(file_path, keep_data_uris=True)
-        markdown_content = result.text_content
+        try:
+            result = md.convert(file_path, keep_data_uris=True)
+            markdown_content = result.text_content
+        except Exception as e:
+            error_msg = f"ファイル変換エラー: {e}\n"
+            if "AuthenticationError" in str(e) or "API key" in str(e):
+                error_msg += "OpenAI APIキーが無効です。通常の変換を試みます。\n"
+                # 通常のMarkItDownで再試行
+                md_normal = MarkItDown(enable_plugins=False)
+                result = md_normal.convert(file_path, keep_data_uris=True)
+                markdown_content = error_msg + result.text_content
+            else:
+                markdown_content = error_msg + "変換に失敗しました。"
         
         # 警告メッセージをMarkdownの先頭に追加
         if warning_message:
