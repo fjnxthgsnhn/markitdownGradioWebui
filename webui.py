@@ -407,7 +407,7 @@ with gr.Blocks() as demo:
             
             gr.Button("変換").click(
                 fn=convert_and_zip, 
-                inputs=[file_input, gr.Textbox(value="", visible=False), gr.Textbox(value=loaded_api_key, visible=False), gr.Dropdown(value=loaded_model, visible=False)], 
+                inputs=[file_input, gr.Textbox(value="", visible=False), gr.Textbox(value=loaded_api_key, visible=False), gr.Dropdown(value=loaded_model, visible=False, allow_custom_value=True)], 
                 outputs=[output_markdown, download_zip]
             )
             
@@ -418,7 +418,7 @@ with gr.Blocks() as demo:
             
             gr.Button("変換").click(
                 fn=convert_and_zip, 
-                inputs=[gr.File(visible=False), url_input, gr.Textbox(value=loaded_api_key, visible=False), gr.Dropdown(value=loaded_model, visible=False)], 
+                inputs=[gr.File(visible=False), url_input, gr.Textbox(value=loaded_api_key, visible=False), gr.Dropdown(value=loaded_model, visible=False, allow_custom_value=True)], 
                 outputs=[output_markdown, download_zip]
             )
             
