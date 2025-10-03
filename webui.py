@@ -438,6 +438,7 @@ with gr.Blocks() as demo:
                 label="使用するモデル",
                 choices=[],
                 value="",
+                allow_custom_value=True,
                 info="APIキーを設定して「モデルリスト更新」ボタンを押すと利用可能なモデルリストが表示されます"
             )
             
