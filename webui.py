@@ -183,7 +183,7 @@ def transcribe_audio(file_path, audio_format):
 def process_docx_images(markdown_content, file_basename, output_files):
     """DOCXファイルから抽出された画像を適切に処理する"""
     # DOCXファイルから抽出されたBase64エンコードされた画像を検出するパターン
-    # 長いBase64文字列を検出（通常のBase64画像とは異なる形式）
+    # 通常の画像Base64とDOCX特有のBase64の両方を検出
     docx_base64_pattern = re.compile(r"!\[.*?\]\((data:.*?;base64,([A-Za-z0-9+/]{100,}={0,2}))\)")
     
     processed_content = markdown_content
@@ -198,14 +198,42 @@ def process_docx_images(markdown_content, file_basename, output_files):
             # Base64データをデコード
             image_data = base64.b64decode(base64_data)
             
-            # 画像形式を判定（PNGとして保存）
-            image_filename = f"{file_basename}_image_{image_counter}.png"
-            output_files[image_filename] = image_data
+            # 画像データの有効性をチェック（PNGマジックナンバーまたはJPEGマジックナンバー）
+            is_valid_image = False
+            if len(image_data) > 8:
+                # PNGマジックナンバー: \x89PNG\r\n\x1a\n
+                if image_data.startswith(b'\x89PNG\r\n\x1a\n'):
+                    is_valid_image = True
+                    extension = ".png"
+                # JPEGマジックナンバー: \xff\xd8\xff
+                elif image_data.startswith(b'\xff\xd8\xff'):
+                    is_valid_image = True
+                    extension = ".jpg"
+                # GIFマジックナンバー: GIF87a or GIF89a
+                elif image_data.startswith(b'GIF87a') or image_data.startswith(b'GIF89a'):
+                    is_valid_image = True
+                    extension = ".gif"
+                # BMPマジックナンバー: BM
+                elif image_data.startswith(b'BM'):
+                    is_valid_image = True
+                    extension = ".bmp"
+                # WebPマジックナンバー: RIFF....WEBP
+                elif image_data.startswith(b'RIFF') and len(image_data) > 12 and image_data[8:12] == b'WEBP':
+                    is_valid_image = True
+                    extension = ".webp"
             
-            # Markdown内のBase64データをファイル参照に置換
-            processed_content = processed_content.replace(data_uri, image_filename)
-            image_counter += 1
-            
+            if is_valid_image:
+                image_filename = f"{file_basename}_image_{image_counter}{extension}"
+                output_files[image_filename] = image_data
+                
+                # Markdown内のBase64データをファイル参照に置換
+                processed_content = processed_content.replace(data_uri, image_filename)
+                image_counter += 1
+                print(f"DOCX画像を抽出: {image_filename}")
+            else:
+                print(f"無効な画像データをスキップ: {len(image_data)} bytes")
+                # 無効なデータは元のBase64を保持
+                
         except Exception as e:
             print(f"DOCX画像処理エラー: {e}")
             # エラーが発生した場合は元のBase64データを保持
