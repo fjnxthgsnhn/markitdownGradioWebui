@@ -198,8 +198,15 @@ def process_docx_images(markdown_content, file_basename, output_files):
             # Base64データをデコード
             image_data = base64.b64decode(base64_data)
             
+            # MIMEタイプをチェック（EMFなどの非対応形式をスキップ）
+            mime_type = data_uri.split(':')[1].split(';')[0]
+            if mime_type not in ['image/png', 'image/jpeg', 'image/gif', 'image/bmp', 'image/webp']:
+                print(f"非対応の画像形式をスキップ: {mime_type}")
+                continue
+            
             # 画像データの有効性をチェック（PNGマジックナンバーまたはJPEGマジックナンバー）
             is_valid_image = False
+            extension = ""
             if len(image_data) > 8:
                 # PNGマジックナンバー: \x89PNG\r\n\x1a\n
                 if image_data.startswith(b'\x89PNG\r\n\x1a\n'):
@@ -231,7 +238,7 @@ def process_docx_images(markdown_content, file_basename, output_files):
                 image_counter += 1
                 print(f"DOCX画像を抽出: {image_filename}")
             else:
-                print(f"無効な画像データをスキップ: {len(image_data)} bytes")
+                print(f"無効な画像データをスキップ: {len(image_data)} bytes, MIMEタイプ: {mime_type}")
                 # 無効なデータは元のBase64を保持
                 
         except Exception as e:
