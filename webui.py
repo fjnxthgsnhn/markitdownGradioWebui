@@ -273,55 +273,54 @@ def convert_and_zip(file_obj, url_input, gemini_api_key, selected_model):
                 
             output_files[f"{file_basename}.md"] = markdown_content.encode('utf-8')
             
-        
-        # Add PDF images to output and insert image references at the end of each page
-        # Group images by page
-        page_images_dict = {}
-        for img in pdf_images:
-            page_num = img['page']
-            if page_num not in page_images_dict:
-                page_images_dict[page_num] = []
-            page_images_dict[page_num].append(img)
-        
-        # Insert image references at appropriate positions in markdown
-        # Use a simpler approach: insert images after each page's content
-        markdown_lines = markdown_content.split('\n')
-        new_markdown_lines = []
-        current_page = 1
-        
-        # Process each line and insert images at page boundaries
-        for line_num, line in enumerate(markdown_lines):
-            new_markdown_lines.append(line)
+            # Add PDF images to output and insert image references at the end of each page
+            # Group images by page
+            page_images_dict = {}
+            for img in pdf_images:
+                page_num = img['page']
+                if page_num not in page_images_dict:
+                    page_images_dict[page_num] = []
+                page_images_dict[page_num].append(img)
             
-            # Check for page breaks - look for form feed character (0x0C) which indicates page break
-            if '\x0c' in line:
-                # Insert images for current page before the page break
-                if current_page in page_images_dict:
-                    for i, img in enumerate(page_images_dict[current_page]):
-                        extension = mimetypes.guess_extension(img['mime_type']) or ".png"
-                        image_filename = f"{file_basename}_page{current_page}_{i}{extension}"
-                        image_data = base64.b64decode(img['data'])
-                        output_files[image_filename] = image_data
-                        
-                        # Add image reference
-                        image_ref = f"\n\n<!-- PDF Image from page {current_page} -->\n![PDF Image {i}]({image_filename})\n"
-                        new_markdown_lines.append(image_ref)
+            # Insert image references at appropriate positions in markdown
+            # Use a simpler approach: insert images after each page's content
+            markdown_lines = markdown_content.split('\n')
+            new_markdown_lines = []
+            current_page = 1
+            
+            # Process each line and insert images at page boundaries
+            for line_num, line in enumerate(markdown_lines):
+                new_markdown_lines.append(line)
                 
-                current_page += 1
-        
-        # Insert images for the last page
-        if current_page in page_images_dict:
-            for i, img in enumerate(page_images_dict[current_page]):
-                extension = mimetypes.guess_extension(img['mime_type']) or ".png"
-                image_filename = f"{file_basename}_page{current_page}_{i}{extension}"
-                image_data = base64.b64decode(img['data'])
-                output_files[image_filename] = image_data
-                
-                # Add image reference
-                image_ref = f"\n\n<!-- PDF Image from page {current_page} -->\n![PDF Image {i}]({image_filename})\n"
-                new_markdown_lines.append(image_ref)
-        
-        markdown_content = '\n'.join(new_markdown_lines)
+                # Check for page breaks - look for form feed character (0x0C) which indicates page break
+                if '\x0c' in line:
+                    # Insert images for current page before the page break
+                    if current_page in page_images_dict:
+                        for i, img in enumerate(page_images_dict[current_page]):
+                            extension = mimetypes.guess_extension(img['mime_type']) or ".png"
+                            image_filename = f"{file_basename}_page{current_page}_{i}{extension}"
+                            image_data = base64.b64decode(img['data'])
+                            output_files[image_filename] = image_data
+                            
+                            # Add image reference
+                            image_ref = f"\n\n<!-- PDF Image from page {current_page} -->\n![PDF Image {i}]({image_filename})\n"
+                            new_markdown_lines.append(image_ref)
+                    
+                    current_page += 1
+            
+            # Insert images for the last page
+            if current_page in page_images_dict:
+                for i, img in enumerate(page_images_dict[current_page]):
+                    extension = mimetypes.guess_extension(img['mime_type']) or ".png"
+                    image_filename = f"{file_basename}_page{current_page}_{i}{extension}"
+                    image_data = base64.b64decode(img['data'])
+                    output_files[image_filename] = image_data
+                    
+                    # Add image reference
+                    image_ref = f"\n\n<!-- PDF Image from page {current_page} -->\n![PDF Image {i}]({image_filename})\n"
+                    new_markdown_lines.append(image_ref)
+            
+            markdown_content = '\n'.join(new_markdown_lines)
         
     elif url_input:
         # Handle URL input
