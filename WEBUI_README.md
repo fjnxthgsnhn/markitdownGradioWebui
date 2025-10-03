@@ -43,17 +43,13 @@ python webui.py
 
 ## インストール方法
 
-### 方法1: requirements.txtを使用（推奨）
+### ステップ1: リポジトリのクローン
 ```bash
-pip install -r requirements.txt
+git clone https://github.com/あなたのユーザー名/markitdown.git
+cd markitdown
 ```
 
-### 方法2: 個別インストール
-```bash
-pip install 'markitdown[all]' gradio pymupdf Pillow requests python-magic
-```
-
-### 仮想環境でのインストール（推奨）
+### ステップ2: 仮想環境の作成と有効化（推奨）
 ```bash
 # 仮想環境の作成
 python -m venv venv
@@ -63,9 +59,18 @@ venv\Scripts\activate
 
 # macOS/Linux
 source venv/bin/activate
+```
 
-# 依存関係のインストール
+### ステップ3: 依存関係のインストール
+
+#### 方法1: requirements.txtを使用（推奨）
+```bash
 pip install -r requirements.txt
+```
+
+#### 方法2: 個別インストール
+```bash
+pip install 'markitdown[all]' gradio pymupdf Pillow requests python-magic
 ```
 
 ## 注意事項
