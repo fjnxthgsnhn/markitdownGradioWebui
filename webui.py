@@ -385,64 +385,75 @@ def save_settings(gemini_api_key, selected_model):
 # 設定を読み込み
 loaded_api_key, loaded_model = load_config()
 
+# メインアプリケーション
 with gr.Blocks() as demo:
     gr.Markdown("### MarkItDown Gradio WebUI: Office/PDF/画像/URL→Markdown変換 & Zipダウンロード")
-
+    
     with gr.Tabs() as tabs:
         with gr.TabItem("ファイルアップロード", id=0):
+            # ファイルアップロード欄の上に常に表示する警告文
+            gr.Markdown("""
+            ### 注意事項
+            - **画像ファイル** (.jpg, .jpeg, .png, .gif, .bmp, .webp) をアップロードする場合:
+              - Google Gemini APIキーが設定されていると、画像はLLMに送信され、画像の説明が生成されます
+              - プライバシーに配慮が必要な画像の場合は変換を中止してください
+            - **その他のファイル** はMarkItDownで処理されます
+            - **PDFファイル** は各ページが画像として抽出され、Markdownに埋め込まれます
+            """)
+            
             file_input = gr.File(label="変換するファイルをアップロード", file_types=ACCEPTED_FILE_TYPES)
-            image_warning = gr.Textbox(label="画像ファイル警告", lines=3, interactive=False, visible=False)
+            output_markdown = gr.Textbox(label="Markdown結果", lines=20)
+            download_zip = gr.File(label="変換結果をダウンロード (Markdownと画像)", file_count="single", interactive=False)
+            
+            gr.Button("変換").click(
+                fn=convert_and_zip, 
+                inputs=[file_input, gr.Textbox(value="", visible=False), gr.Textbox(value=loaded_api_key, visible=False), gr.Dropdown(value=loaded_model, visible=False)], 
+                outputs=[output_markdown, download_zip]
+            )
+            
         with gr.TabItem("URL入力", id=1):
             url_input = gr.Textbox(label="変換するURLを入力 (例: RSS, Wikipedia, YouTube, Bing SERP)", placeholder="https://example.com/article.html")
-        with gr.TabItem("設定", id=2):
-            gr.Markdown("### Google Gemini API設定")
-            with gr.Row():
-                gemini_api_key = gr.Textbox(
-                    label="Google Gemini APIキー (画像ファイルのLLM処理に必要)",
-                    placeholder="AIza...",
-                    type="password",
-                    value=loaded_api_key,
-                    info="画像ファイルのLLM処理にはGoogle Gemini APIキーが必要です。取得方法: https://aistudio.google.com/app/apikey"
-                )
+            output_markdown = gr.Textbox(label="Markdown結果", lines=20)
+            download_zip = gr.File(label="変換結果をダウンロード (Markdownと画像)", file_count="single", interactive=False)
             
-            with gr.Row():
-                model_dropdown = gr.Dropdown(
-                    label="使用するモデル",
-                    choices=["gemini-pro-vision"],  # 初期値
-                    value=loaded_model,
-                    info="APIキーを設定すると利用可能なモデルリストが表示されます"
-                )
+            gr.Button("変換").click(
+                fn=convert_and_zip, 
+                inputs=[gr.File(visible=False), url_input, gr.Textbox(value=loaded_api_key, visible=False), gr.Dropdown(value=loaded_model, visible=False)], 
+                outputs=[output_markdown, download_zip]
+            )
+            
+        with gr.TabItem("設定", id=2):
+            gr.Markdown("#### Google Gemini API設定")
+            
+            # 設定コンポーネントを設定タブ内に配置
+            gemini_api_key = gr.Textbox(
+                label="Google Gemini APIキー (画像ファイルのLLM処理に必要)",
+                placeholder="AIza...",
+                type="password",
+                value=loaded_api_key,
+                info="画像ファイルのLLM処理にはGoogle Gemini APIキーが必要です。取得方法: https://aistudio.google.com/app/apikey"
+            )
+            
+            model_dropdown = gr.Dropdown(
+                label="使用するモデル",
+                choices=[],
+                value="",
+                info="APIキーを設定して「モデルリスト更新」ボタンを押すと利用可能なモデルリストが表示されます"
+            )
             
             save_status = gr.Textbox(label="保存ステータス", interactive=False, visible=False)
             
-            gr.Button("設定を保存").click(
-                fn=save_settings,
-                inputs=[gemini_api_key, model_dropdown],
-                outputs=[save_status]
-            )
-    
-    # 出力コンポーネントは設定タブの外に配置
-    output_markdown = gr.Textbox(label="Markdown結果", lines=20)
-    download_zip = gr.File(label="変換結果をダウンロード (Markdownと画像)", file_count="single", interactive=False)
-
-    # ファイル入力時のリアルタイム警告
-    file_input.change(
-        fn=check_image_file,
-        inputs=[file_input],
-        outputs=[image_warning]
-    )
-
-    # APIキー変更時にモデルリストを更新
-    gemini_api_key.change(
-        fn=get_available_models,
-        inputs=[gemini_api_key],
-        outputs=[model_dropdown]
-    )
-
-    gr.Button("変換").click(
-        fn=convert_and_zip, 
-        inputs=[file_input, url_input, gemini_api_key, model_dropdown], 
-        outputs=[output_markdown, download_zip]
-    )
+            with gr.Row():
+                gr.Button("モデルリスト更新").click(
+                    fn=get_available_models,
+                    inputs=[gemini_api_key],
+                    outputs=[model_dropdown]
+                )
+                
+                gr.Button("設定を保存").click(
+                    fn=save_settings,
+                    inputs=[gemini_api_key, model_dropdown],
+                    outputs=[save_status]
+                )
 
 demo.launch()
