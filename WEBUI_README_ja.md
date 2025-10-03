@@ -46,7 +46,7 @@ python webui.py
 ## Windowsの場合
 ### ステップ1: リポジトリのクローン
 ```bash
-git clone https://github.com/あなたのユーザー名/markitdown.git
+git clone https://github.com/fjnxthgsnhn/markitdownGradioWebui.git
 cd markitdown
 ```
 ### ステップ2: webui.batの起動
@@ -58,7 +58,7 @@ run_webui.bat
 ## Windows以外の場合
 ### ステップ1: リポジトリのクローン
 ```bash
-git clone https://github.com/あなたのユーザー名/markitdown.git
+git clone https://github.com/fjnxthgsnhn/markitdownGradioWebui.git
 cd markitdown
 ```
 
