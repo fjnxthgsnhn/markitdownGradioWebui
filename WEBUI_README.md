@@ -43,6 +43,19 @@ python webui.py
 
 ## インストール方法
 
+## Windowsの場合
+### ステップ1: リポジトリのクローン
+```bash
+git clone https://github.com/あなたのユーザー名/markitdown.git
+cd markitdown
+```
+### ステップ2: webui.batの起動
+```
+run_webui.bat
+```
+必要なライブラリが自動的にインストールされ仮想環境が作られ、webuiが自動的に立ち上がります。
+
+## Windows以外の場合
 ### ステップ1: リポジトリのクローン
 ```bash
 git clone https://github.com/あなたのユーザー名/markitdown.git
@@ -53,9 +66,6 @@ cd markitdown
 ```bash
 # 仮想環境の作成
 python -m venv venv
-
-# Windows
-venv\Scripts\activate
 
 # macOS/Linux
 source venv/bin/activate
