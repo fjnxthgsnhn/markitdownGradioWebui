@@ -29,13 +29,46 @@ python webui.py
 
 ## 対応ファイル形式
 
-- **PDF** - テキスト抽出
-- **Word (.docx)** - 文書構造の保持
+- **PDF** - テキスト抽出とページ画像の埋め込み
+- **Word (.docx)** - 文書構造の保持と画像抽出
 - **PowerPoint (.pptx)** - スライドコンテンツの変換
 - **Excel (.xlsx)** - 表データの変換
-- **画像** - OCRによるテキスト抽出
+- **画像** - Google Gemini APIによる高度な画像認識と説明生成
+- **音声ファイル** - Google Speech Recognition APIによる文字起こし（MP3, WAV, OGG, FLAC, AAC, M4A）
 - **HTML** - マークダウンへの変換
 - **テキストファイル** - 各種形式（CSV, JSON, XMLなど）
+
+## Google Gemini APIの設定
+
+画像ファイルの高度な処理と音声ファイルの文字起こしには、Google Gemini APIキーの設定が必要です。
+
+### Gemini APIキーの取得方法
+
+1. [Google AI Studio](https://aistudio.google.com/app/apikey)にアクセス
+2. Googleアカウントでログイン
+3. 「APIキーを作成」をクリック
+4. プロジェクトを選択または新規作成
+5. APIキーが生成されるのでコピー
+
+### Web UIでの設定方法
+
+1. Web UIの「設定」タブを開く
+2. 「Google Gemini APIキー」欄に取得したAPIキーを入力
+3. 「モデルリスト更新」ボタンをクリックして利用可能なモデルを取得
+4. 「設定を保存」ボタンをクリック
+
+### 対応モデル
+
+- **gemini-pro-vision** - 画像認識とテキスト生成
+- **gemini-1.5-flash** - 高速なマルチモーダル処理
+- **gemini-1.5-pro** - 高精度なマルチモーダル処理
+- その他利用可能なGeminiモデル
+
+### プライバシーとセキュリティ
+
+- APIキーはローカルマシンで暗号化されて保存されます
+- 画像ファイルはGoogleのサーバーに送信され、画像の説明が生成されます
+- プライバシーに配慮が必要な画像の場合は変換を中止してください
 
 ## 必要条件
 
