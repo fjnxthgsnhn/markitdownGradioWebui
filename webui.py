@@ -8,6 +8,59 @@ import requests
 import shutil
 import tempfile
 import mimetypes
+import json
+import base64
+import hashlib
+from cryptography.fernet import Fernet
+
+# 設定ファイルのパス
+CONFIG_FILE = "config.json"
+
+def generate_key():
+    """暗号化キーを生成（マシン固有のキーを使用）"""
+    machine_id = hashlib.sha256(os.environ.get('COMPUTERNAME', 'default').encode()).digest()
+    return base64.urlsafe_b64encode(machine_id[:32])
+
+def encrypt_data(data, key):
+    """データを暗号化"""
+    fernet = Fernet(key)
+    return fernet.encrypt(data.encode()).decode()
+
+def decrypt_data(encrypted_data, key):
+    """データを復号化"""
+    try:
+        fernet = Fernet(key)
+        return fernet.decrypt(encrypted_data.encode()).decode()
+    except:
+        return ""
+
+def save_config(gemini_api_key, selected_model):
+    """設定をファイルに保存"""
+    key = generate_key()
+    config = {
+        "gemini_api_key": encrypt_data(gemini_api_key, key) if gemini_api_key else "",
+        "selected_model": selected_model
+    }
+    with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
+        json.dump(config, f, ensure_ascii=False, indent=2)
+
+def load_config():
+    """設定をファイルから読み込み"""
+    if not os.path.exists(CONFIG_FILE):
+        return "", "gemini-pro-vision"
+    
+    try:
+        key = generate_key()
+        with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
+            config = json.load(f)
+        
+        api_key = decrypt_data(config.get("gemini_api_key", ""), key) if config.get("gemini_api_key") else ""
+        selected_model = config.get("selected_model", "gemini-pro-vision")
+        
+        return api_key, selected_model
+    except Exception as e:
+        print(f"設定読み込みエラー: {e}")
+        return "", "gemini-pro-vision"
 
 def extract_page_images_from_pdf(pdf_path):
     """Extract each page as a single image from PDF using PyMuPDF and return as base64 encoded data"""
@@ -66,7 +119,7 @@ def check_image_file(file_obj):
 def get_available_models(gemini_api_key):
     """利用可能なGeminiモデルリストを取得"""
     if not gemini_api_key:
-        return ["gemini-pro-vision"]  # デフォルトモデル
+        return gr.Dropdown(choices=["gemini-pro-vision"], value="gemini-pro-vision")
     
     try:
         import google.generativeai as genai
@@ -76,10 +129,17 @@ def get_available_models(gemini_api_key):
         for model in models:
             if 'generateContent' in model.supported_generation_methods:
                 available_models.append(model.name.split('/')[-1])
-        return available_models if available_models else ["gemini-pro-vision"]
+        
+        if available_models:
+            # 画像処理に適したモデルを優先的に選択
+            preferred_models = [model for model in available_models if 'vision' in model.lower() or 'flash' in model.lower()]
+            default_model = preferred_models[0] if preferred_models else available_models[0]
+            return gr.Dropdown(choices=available_models, value=default_model)
+        else:
+            return gr.Dropdown(choices=["gemini-pro-vision"], value="gemini-pro-vision")
     except Exception as e:
         print(f"モデルリスト取得エラー: {e}")
-        return ["gemini-pro-vision"]  # デフォルトモデル
+        return gr.Dropdown(choices=["gemini-pro-vision"], value="gemini-pro-vision")
 
 def convert_and_zip(file_obj, url_input, gemini_api_key, selected_model):
     markdown_content = ""
@@ -99,16 +159,33 @@ def convert_and_zip(file_obj, url_input, gemini_api_key, selected_model):
     if file_obj and file_extension in ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp'] and gemini_api_key:
         try:
             import google.generativeai as genai
+            import PIL.Image
             genai.configure(api_key=gemini_api_key)
             # 選択されたモデルを使用
             model = genai.GenerativeModel(selected_model)
-            md = MarkItDown(llm_client=model, llm_model=selected_model, enable_plugins=False)
             warning_message = f"Google Gemini ({selected_model})を使用して画像の説明を生成します...\n\n"
+            
+            # 画像を読み込んでGeminiで処理
+            img = PIL.Image.open(file_path)
+            response = model.generate_content([
+                "この画像を詳細に説明してください。画像に含まれるテキストがあればOCRで抽出し、画像の内容を詳しく説明してください。",
+                img
+            ])
+            
+            # Geminiの応答をMarkdownに追加
+            gemini_description = f"## 画像の説明 (Google Gemini {selected_model})\n\n{response.text}\n\n---\n\n"
+            markdown_content = gemini_description
+            # 通常の変換は行わず、Geminiの説明のみを使用
+            skip_normal_conversion = True
+            
         except ImportError:
             warning_message = "Google Generative AIパッケージがインストールされていません。通常の変換を行います。\n\n"
+            skip_normal_conversion = False
         except Exception as e:
-            warning_message = f"Google Geminiの初期化に失敗しました: {e}。通常の変換を行います。\n\n"
-            md = MarkItDown(enable_plugins=False)
+            warning_message = f"Google Geminiの処理に失敗しました: {e}。通常の変換を行います。\n\n"
+            skip_normal_conversion = False
+    else:
+        skip_normal_conversion = False
 
     if file_obj:
         # Handle file upload
@@ -121,26 +198,28 @@ def convert_and_zip(file_obj, url_input, gemini_api_key, selected_model):
         if file_extension == '.pdf':
             pdf_images = extract_page_images_from_pdf(file_path)
         
-        # Convert to markdown
-        try:
-            result = md.convert(file_path, keep_data_uris=True)
-            markdown_content = result.text_content
-        except Exception as e:
-            error_msg = f"ファイル変換エラー: {e}\n"
-            if "API key" in str(e) or "authentication" in str(e).lower():
-                error_msg += "Google Gemini APIキーが無効です。通常の変換を試みます。\n"
-                # 通常のMarkItDownで再試行
-                md_normal = MarkItDown(enable_plugins=False)
-                result = md_normal.convert(file_path, keep_data_uris=True)
-                markdown_content = error_msg + result.text_content
-            elif "quota" in str(e).lower() or "rate limit" in str(e).lower():
-                error_msg += "Google Gemini APIの利用制限に達しました。通常の変換を試みます。\n"
-                # 通常のMarkItDownで再試行
-                md_normal = MarkItDown(enable_plugins=False)
-                result = md_normal.convert(file_path, keep_data_uris=True)
-                markdown_content = error_msg + result.text_content
-            else:
-                markdown_content = error_msg + "変換に失敗しました。"
+        # Gemini APIが成功した場合は通常の変換をスキップ
+        if not skip_normal_conversion:
+            # Convert to markdown
+            try:
+                result = md.convert(file_path, keep_data_uris=True)
+                markdown_content = result.text_content
+            except Exception as e:
+                error_msg = f"ファイル変換エラー: {e}\n"
+                if "API key" in str(e) or "authentication" in str(e).lower():
+                    error_msg += "Google Gemini APIキーが無効です。通常の変換を試みます。\n"
+                    # 通常のMarkItDownで再試行
+                    md_normal = MarkItDown(enable_plugins=False)
+                    result = md_normal.convert(file_path, keep_data_uris=True)
+                    markdown_content = error_msg + result.text_content
+                elif "quota" in str(e).lower() or "rate limit" in str(e).lower():
+                    error_msg += "Google Gemini APIの利用制限に達しました。通常の変換を試みます。\n"
+                    # 通常のMarkItDownで再試行
+                    md_normal = MarkItDown(enable_plugins=False)
+                    result = md_normal.convert(file_path, keep_data_uris=True)
+                    markdown_content = error_msg + result.text_content
+                else:
+                    markdown_content = error_msg + "変換に失敗しました。"
         
         # 警告メッセージをMarkdownの先頭に追加
         if warning_message:
@@ -298,6 +377,14 @@ ACCEPTED_FILE_TYPES = [
     ".mp3", ".wav", ".ogg", ".flac", ".aac" # Common audio formats
 ]
 
+def save_settings(gemini_api_key, selected_model):
+    """設定を保存"""
+    save_config(gemini_api_key, selected_model)
+    return "設定を保存しました"
+
+# 設定を読み込み
+loaded_api_key, loaded_model = load_config()
+
 with gr.Blocks() as demo:
     gr.Markdown("### MarkItDown Gradio WebUI: Office/PDF/画像/URL→Markdown変換 & Zipダウンロード")
 
@@ -307,25 +394,34 @@ with gr.Blocks() as demo:
             image_warning = gr.Textbox(label="画像ファイル警告", lines=3, interactive=False, visible=False)
         with gr.TabItem("URL入力", id=1):
             url_input = gr.Textbox(label="変換するURLを入力 (例: RSS, Wikipedia, YouTube, Bing SERP)", placeholder="https://example.com/article.html")
+        with gr.TabItem("設定", id=2):
+            gr.Markdown("### Google Gemini API設定")
+            with gr.Row():
+                gemini_api_key = gr.Textbox(
+                    label="Google Gemini APIキー (画像ファイルのLLM処理に必要)",
+                    placeholder="AIza...",
+                    type="password",
+                    value=loaded_api_key,
+                    info="画像ファイルのLLM処理にはGoogle Gemini APIキーが必要です。取得方法: https://aistudio.google.com/app/apikey"
+                )
+            
+            with gr.Row():
+                model_dropdown = gr.Dropdown(
+                    label="使用するモデル",
+                    choices=["gemini-pro-vision"],  # 初期値
+                    value=loaded_model,
+                    info="APIキーを設定すると利用可能なモデルリストが表示されます"
+                )
+            
+            save_status = gr.Textbox(label="保存ステータス", interactive=False, visible=False)
+            
+            gr.Button("設定を保存").click(
+                fn=save_settings,
+                inputs=[gemini_api_key, model_dropdown],
+                outputs=[save_status]
+            )
     
-    # Google Gemini APIキー設定
-    with gr.Row():
-        gemini_api_key = gr.Textbox(
-            label="Google Gemini APIキー (画像ファイルのLLM処理に必要)",
-            placeholder="AIza...",
-            type="password",
-            info="画像ファイルのLLM処理にはGoogle Gemini APIキーが必要です。取得方法: https://aistudio.google.com/app/apikey"
-        )
-    
-    # モデル選択
-    with gr.Row():
-        model_dropdown = gr.Dropdown(
-            label="使用するモデル",
-            choices=["gemini-pro-vision"],  # 初期値
-            value="gemini-pro-vision",
-            info="APIキーを設定すると利用可能なモデルリストが表示されます"
-        )
-    
+    # 出力コンポーネントは設定タブの外に配置
     output_markdown = gr.Textbox(label="Markdown結果", lines=20)
     download_zip = gr.File(label="変換結果をダウンロード (Markdownと画像)", file_count="single", interactive=False)
 
