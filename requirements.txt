@@ -4,4 +4,4 @@ pymupdf
 Pillow
 requests
 python-magic
-openai
+google-generativeai

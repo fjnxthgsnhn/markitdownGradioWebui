@@ -57,13 +57,31 @@ def check_image_file(file_obj):
     
     if file_extension in ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp']:
         warning_message = "⚠️ 警告: 画像ファイルが検出されました\n"
-        warning_message += "画像ファイルはLLM（OpenAI GPT-4oなど）に送信され、画像の説明が生成されます\n"
+        warning_message += "画像ファイルはLLM（Google Geminiなど）に送信され、画像の説明が生成されます\n"
         warning_message += "プライバシーに配慮が必要な画像の場合は変換を中止してください\n\n"
         return warning_message
     
     return ""
 
-def convert_and_zip(file_obj, url_input, openai_api_key):
+def get_available_models(gemini_api_key):
+    """利用可能なGeminiモデルリストを取得"""
+    if not gemini_api_key:
+        return ["gemini-pro-vision"]  # デフォルトモデル
+    
+    try:
+        import google.generativeai as genai
+        genai.configure(api_key=gemini_api_key)
+        models = genai.list_models()
+        available_models = []
+        for model in models:
+            if 'generateContent' in model.supported_generation_methods:
+                available_models.append(model.name.split('/')[-1])
+        return available_models if available_models else ["gemini-pro-vision"]
+    except Exception as e:
+        print(f"モデルリスト取得エラー: {e}")
+        return ["gemini-pro-vision"]  # デフォルトモデル
+
+def convert_and_zip(file_obj, url_input, gemini_api_key, selected_model):
     markdown_content = ""
     output_files = {} # filename: content (bytes)
     
@@ -77,24 +95,19 @@ def convert_and_zip(file_obj, url_input, openai_api_key):
         file_path = file_obj.name
         file_extension = os.path.splitext(file_path)[1].lower()
     
-        # 画像ファイルの場合はLLMを使用（APIキーが設定されている場合）
-    if file_obj and file_extension in ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp'] and openai_api_key:
+    # 画像ファイルの場合はLLMを使用（APIキーが設定されている場合）
+    if file_obj and file_extension in ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp'] and gemini_api_key:
         try:
-            from openai import OpenAI
-            from openai import AuthenticationError, RateLimitError
-            client = OpenAI(api_key=openai_api_key)
-            md = MarkItDown(llm_client=client, llm_model="gpt-4o", enable_plugins=False)
-            warning_message = "LLMを使用して画像の説明を生成します...\n\n"
+            import google.generativeai as genai
+            genai.configure(api_key=gemini_api_key)
+            # 選択されたモデルを使用
+            model = genai.GenerativeModel(selected_model)
+            md = MarkItDown(llm_client=model, llm_model=selected_model, enable_plugins=False)
+            warning_message = f"Google Gemini ({selected_model})を使用して画像の説明を生成します...\n\n"
         except ImportError:
-            warning_message = "OpenAIパッケージがインストールされていません。通常の変換を行います。\n\n"
-        except AuthenticationError:
-            warning_message = "OpenAI APIキーが無効です。通常の変換を行います。\n\n"
-            md = MarkItDown(enable_plugins=False)
-        except RateLimitError:
-            warning_message = "OpenAI APIの利用制限に達しました。通常の変換を行います。\n\n"
-            md = MarkItDown(enable_plugins=False)
+            warning_message = "Google Generative AIパッケージがインストールされていません。通常の変換を行います。\n\n"
         except Exception as e:
-            warning_message = f"LLMの初期化に失敗しました: {e}。通常の変換を行います。\n\n"
+            warning_message = f"Google Geminiの初期化に失敗しました: {e}。通常の変換を行います。\n\n"
             md = MarkItDown(enable_plugins=False)
 
     if file_obj:
@@ -114,14 +127,14 @@ def convert_and_zip(file_obj, url_input, openai_api_key):
             markdown_content = result.text_content
         except Exception as e:
             error_msg = f"ファイル変換エラー: {e}\n"
-            if "AuthenticationError" in str(e) or "API key" in str(e):
-                error_msg += "OpenAI APIキーが無効です。通常の変換を試みます。\n"
+            if "API key" in str(e) or "authentication" in str(e).lower():
+                error_msg += "Google Gemini APIキーが無効です。通常の変換を試みます。\n"
                 # 通常のMarkItDownで再試行
                 md_normal = MarkItDown(enable_plugins=False)
                 result = md_normal.convert(file_path, keep_data_uris=True)
                 markdown_content = error_msg + result.text_content
-            elif "RateLimitError" in str(e) or "insufficient_quota" in str(e) or "quota" in str(e):
-                error_msg += "OpenAI APIの利用制限に達しました。通常の変換を試みます。\n"
+            elif "quota" in str(e).lower() or "rate limit" in str(e).lower():
+                error_msg += "Google Gemini APIの利用制限に達しました。通常の変換を試みます。\n"
                 # 通常のMarkItDownで再試行
                 md_normal = MarkItDown(enable_plugins=False)
                 result = md_normal.convert(file_path, keep_data_uris=True)
@@ -295,13 +308,22 @@ with gr.Blocks() as demo:
         with gr.TabItem("URL入力", id=1):
             url_input = gr.Textbox(label="変換するURLを入力 (例: RSS, Wikipedia, YouTube, Bing SERP)", placeholder="https://example.com/article.html")
     
-    # OpenAI APIキー設定
+    # Google Gemini APIキー設定
     with gr.Row():
-        openai_api_key = gr.Textbox(
-            label="OpenAI APIキー (画像ファイルのLLM処理に必要)",
-            placeholder="sk-...",
+        gemini_api_key = gr.Textbox(
+            label="Google Gemini APIキー (画像ファイルのLLM処理に必要)",
+            placeholder="AIza...",
             type="password",
-            info="画像ファイルのLLM処理にはOpenAI APIキーが必要です。取得方法: https://platform.openai.com/api-keys"
+            info="画像ファイルのLLM処理にはGoogle Gemini APIキーが必要です。取得方法: https://aistudio.google.com/app/apikey"
+        )
+    
+    # モデル選択
+    with gr.Row():
+        model_dropdown = gr.Dropdown(
+            label="使用するモデル",
+            choices=["gemini-pro-vision"],  # 初期値
+            value="gemini-pro-vision",
+            info="APIキーを設定すると利用可能なモデルリストが表示されます"
         )
     
     output_markdown = gr.Textbox(label="Markdown結果", lines=20)
@@ -314,9 +336,16 @@ with gr.Blocks() as demo:
         outputs=[image_warning]
     )
 
+    # APIキー変更時にモデルリストを更新
+    gemini_api_key.change(
+        fn=get_available_models,
+        inputs=[gemini_api_key],
+        outputs=[model_dropdown]
+    )
+
     gr.Button("変換").click(
         fn=convert_and_zip, 
-        inputs=[file_input, url_input, openai_api_key], 
+        inputs=[file_input, url_input, gemini_api_key, model_dropdown], 
         outputs=[output_markdown, download_zip]
     )
 
