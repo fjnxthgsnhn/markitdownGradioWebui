@@ -81,12 +81,14 @@ if %ERRORLEVEL% neq 0 (
     )
     
     if %ERRORLEVEL% neq 0 (
-        echo [エラー] パッケージのインストールに失敗しました
-        pause
-        exit /b 1
+        echo [警告] パッケージのインストール中に問題が発生しました
+        echo 一部のパッケージが正常にインストールされていない可能性があります
+        echo 手動で確認してください: pip install -r requirements.txt
+        echo.
+    ) else (
+        echo パッケージのインストールが完了しました
+        echo.
     )
-    echo パッケージのインストールが完了しました
-    echo.
 )
 
 echo ========================================
