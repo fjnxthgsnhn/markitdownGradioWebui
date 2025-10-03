@@ -11,6 +11,7 @@ import mimetypes
 import json
 import base64
 import hashlib
+import io
 from cryptography.fernet import Fernet
 
 # 設定ファイルのパス
@@ -141,6 +142,44 @@ def get_available_models(gemini_api_key):
         print(f"モデルリスト取得エラー: {e}")
         return gr.Dropdown(choices=["gemini-pro-vision"], value="gemini-pro-vision")
 
+def transcribe_audio(file_path, audio_format):
+    """音声ファイルを文字起こしする"""
+    try:
+        import speech_recognition as sr
+        import pydub
+    except ImportError as e:
+        return f"音声文字起こしに必要なライブラリがインストールされていません: {e}"
+    
+    try:
+        # 音声ファイルを読み込む
+        if audio_format in ["wav", "aiff", "flac"]:
+            audio_source = open(file_path, "rb")
+        elif audio_format in ["mp3", "mp4", "m4a", "ogg", "flac", "aac"]:
+            audio_segment = pydub.AudioSegment.from_file(file_path, format=audio_format)
+            audio_source = io.BytesIO()
+            audio_segment.export(audio_source, format="wav")
+            audio_source.seek(0)
+        else:
+            return f"サポートされていない音声形式: {audio_format}"
+        
+        # 音声認識を実行
+        recognizer = sr.Recognizer()
+        with sr.AudioFile(audio_source) as source:
+            audio = recognizer.record(source)
+            transcript = recognizer.recognize_google(audio, language="ja-JP").strip()
+        
+        if audio_format not in ["wav", "aiff", "flac"]:
+            audio_source.close()
+        
+        return "[音声が検出されませんでした]" if transcript == "" else transcript
+        
+    except sr.UnknownValueError:
+        return "音声を認識できませんでした"
+    except sr.RequestError as e:
+        return f"音声認識サービスでエラーが発生しました: {e}"
+    except Exception as e:
+        return f"音声文字起こし中にエラーが発生しました: {e}"
+
 def convert_and_zip(file_obj, url_input, gemini_api_key, selected_model):
     markdown_content = ""
     output_files = {} # filename: content (bytes)
@@ -193,39 +232,47 @@ def convert_and_zip(file_obj, url_input, gemini_api_key, selected_model):
         file_extension = os.path.splitext(file_path)[1].lower()
         file_basename = os.path.splitext(os.path.basename(file_path))[0]
         
-        # For PDF files, extract page images first
-        pdf_images = []
-        if file_extension == '.pdf':
-            pdf_images = extract_page_images_from_pdf(file_path)
-        
-        # Gemini APIが成功した場合は通常の変換をスキップ
-        if not skip_normal_conversion:
-            # Convert to markdown
-            try:
-                result = md.convert(file_path, keep_data_uris=True)
-                markdown_content = result.text_content
-            except Exception as e:
-                error_msg = f"ファイル変換エラー: {e}\n"
-                if "API key" in str(e) or "authentication" in str(e).lower():
-                    error_msg += "Google Gemini APIキーが無効です。通常の変換を試みます。\n"
-                    # 通常のMarkItDownで再試行
-                    md_normal = MarkItDown(enable_plugins=False)
-                    result = md_normal.convert(file_path, keep_data_uris=True)
-                    markdown_content = error_msg + result.text_content
-                elif "quota" in str(e).lower() or "rate limit" in str(e).lower():
-                    error_msg += "Google Gemini APIの利用制限に達しました。通常の変換を試みます。\n"
-                    # 通常のMarkItDownで再試行
-                    md_normal = MarkItDown(enable_plugins=False)
-                    result = md_normal.convert(file_path, keep_data_uris=True)
-                    markdown_content = error_msg + result.text_content
-                else:
-                    markdown_content = error_msg + "変換に失敗しました。"
-        
-        # 警告メッセージをMarkdownの先頭に追加
-        if warning_message:
-            markdown_content = warning_message + markdown_content
+        # 音声ファイルの場合は文字起こしを実行
+        if file_extension in ['.mp3', '.wav', '.ogg', '.flac', '.aac', '.m4a']:
+            audio_format = file_extension.lstrip('.')
+            transcript = transcribe_audio(file_path, audio_format)
+            markdown_content = f"## 音声文字起こし結果\n\n{transcript}\n\n---\n\n"
+            output_files[f"{file_basename}.md"] = markdown_content.encode('utf-8')
+        else:
+            # For PDF files, extract page images first
+            pdf_images = []
+            if file_extension == '.pdf':
+                pdf_images = extract_page_images_from_pdf(file_path)
             
-        output_files[f"{file_basename}.md"] = markdown_content.encode('utf-8')
+            # Gemini APIが成功した場合は通常の変換をスキップ
+            if not skip_normal_conversion:
+                # Convert to markdown
+                try:
+                    result = md.convert(file_path, keep_data_uris=True)
+                    markdown_content = result.text_content
+                except Exception as e:
+                    error_msg = f"ファイル変換エラー: {e}\n"
+                    if "API key" in str(e) or "authentication" in str(e).lower():
+                        error_msg += "Google Gemini APIキーが無効です。通常の変換を試みます。\n"
+                        # 通常のMarkItDownで再試行
+                        md_normal = MarkItDown(enable_plugins=False)
+                        result = md_normal.convert(file_path, keep_data_uris=True)
+                        markdown_content = error_msg + result.text_content
+                    elif "quota" in str(e).lower() or "rate limit" in str(e).lower():
+                        error_msg += "Google Gemini APIの利用制限に達しました。通常の変換を試みます。\n"
+                        # 通常のMarkItDownで再試行
+                        md_normal = MarkItDown(enable_plugins=False)
+                        result = md_normal.convert(file_path, keep_data_uris=True)
+                        markdown_content = error_msg + result.text_content
+                    else:
+                        markdown_content = error_msg + "変換に失敗しました。"
+            
+            # 警告メッセージをMarkdownの先頭に追加
+            if warning_message:
+                markdown_content = warning_message + markdown_content
+                
+            output_files[f"{file_basename}.md"] = markdown_content.encode('utf-8')
+            
         
         # Add PDF images to output and insert image references at the end of each page
         # Group images by page
@@ -397,6 +444,9 @@ with gr.Blocks() as demo:
             - **画像ファイル** (.jpg, .jpeg, .png, .gif, .bmp, .webp) をアップロードする場合:
               - Google Gemini APIキーが設定されていると、画像はLLMに送信され、画像の説明が生成されます
               - プライバシーに配慮が必要な画像の場合は変換を中止してください
+            - **音声ファイル** (.mp3, .wav, .ogg, .flac, .aac, .m4a) をアップロードする場合:
+              - Google Speech Recognition APIを使用して文字起こしが行われます
+              - 日本語音声の認識精度が高くなります
             - **その他のファイル** はMarkItDownで処理されます
             - **PDFファイル** は各ページが画像として抽出され、Markdownに埋め込まれます
             """)
