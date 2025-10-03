@@ -47,9 +47,29 @@ def extract_page_images_from_pdf(pdf_path):
         print(f"Error extracting page images from PDF: {e}")
         return []
 
-def convert_and_zip(file_obj, url_input):
+def check_image_file(file_obj):
+    """画像ファイルがアップロードされたかチェックし、警告メッセージを返す"""
+    if not file_obj:
+        return ""
+    
+    file_path = file_obj.name
+    file_extension = os.path.splitext(file_path)[1].lower()
+    
+    if file_extension in ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp']:
+        warning_message = "⚠️ 警告: 画像ファイルが検出されました\n"
+        warning_message += "画像ファイルはLLM（OpenAI GPT-4oなど）に送信され、画像の説明が生成されます\n"
+        warning_message += "プライバシーに配慮が必要な画像の場合は変換を中止してください\n\n"
+        return warning_message
+    
+    return ""
+
+def convert_and_zip(file_obj, url_input, openai_api_key):
     markdown_content = ""
     output_files = {} # filename: content (bytes)
+    
+    # MarkItDownの初期化
+    md = MarkItDown(enable_plugins=False)
+    warning_message = ""
     
     # 画像ファイルの場合はLLMを使用するか確認
     file_extension = None
@@ -57,25 +77,17 @@ def convert_and_zip(file_obj, url_input):
         file_path = file_obj.name
         file_extension = os.path.splitext(file_path)[1].lower()
     
-    # MarkItDownの初期化（画像ファイルの場合はLLMを使用）
-    if file_obj and file_extension in ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp']:
+    # 画像ファイルの場合はLLMを使用（APIキーが設定されている場合）
+    if file_obj and file_extension in ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp'] and openai_api_key:
         try:
             from openai import OpenAI
-            client = OpenAI()
+            client = OpenAI(api_key=openai_api_key)
             md = MarkItDown(llm_client=client, llm_model="gpt-4o", enable_plugins=False)
-            warning_message = "⚠️ 警告: 画像ファイルが検出されました\n"
-            warning_message += "画像ファイルはLLM（OpenAI GPT-4oなど）に送信され、画像の説明が生成されます\n"
-            warning_message += "プライバシーに配慮が必要な画像の場合は変換を中止してください\n\n"
-            warning_message += "LLMを使用して画像の説明を生成します...\n\n"
+            warning_message = "LLMを使用して画像の説明を生成します...\n\n"
         except ImportError:
             warning_message = "OpenAIパッケージがインストールされていません。通常の変換を行います。\n\n"
-            md = MarkItDown(enable_plugins=False)
         except Exception as e:
             warning_message = f"LLMの初期化に失敗しました: {e}。通常の変換を行います。\n\n"
-            md = MarkItDown(enable_plugins=False)
-    else:
-        md = MarkItDown(enable_plugins=False)
-        warning_message = ""
 
     if file_obj:
         # Handle file upload
@@ -254,15 +266,32 @@ with gr.Blocks() as demo:
     with gr.Tabs() as tabs:
         with gr.TabItem("ファイルアップロード", id=0):
             file_input = gr.File(label="変換するファイルをアップロード", file_types=ACCEPTED_FILE_TYPES)
+            image_warning = gr.Textbox(label="画像ファイル警告", lines=3, interactive=False, visible=False)
         with gr.TabItem("URL入力", id=1):
             url_input = gr.Textbox(label="変換するURLを入力 (例: RSS, Wikipedia, YouTube, Bing SERP)", placeholder="https://example.com/article.html")
+    
+    # OpenAI APIキー設定
+    with gr.Row():
+        openai_api_key = gr.Textbox(
+            label="OpenAI APIキー (画像ファイルのLLM処理に必要)",
+            placeholder="sk-...",
+            type="password",
+            info="画像ファイルのLLM処理にはOpenAI APIキーが必要です。取得方法: https://platform.openai.com/api-keys"
+        )
     
     output_markdown = gr.Textbox(label="Markdown結果", lines=20)
     download_zip = gr.File(label="変換結果をダウンロード (Markdownと画像)", file_count="single", interactive=False)
 
+    # ファイル入力時のリアルタイム警告
+    file_input.change(
+        fn=check_image_file,
+        inputs=[file_input],
+        outputs=[image_warning]
+    )
+
     gr.Button("変換").click(
         fn=convert_and_zip, 
-        inputs=[file_input, url_input], 
+        inputs=[file_input, url_input, openai_api_key], 
         outputs=[output_markdown, download_zip]
     )
 
