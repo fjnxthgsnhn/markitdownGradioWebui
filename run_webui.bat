@@ -12,11 +12,30 @@ cd /d "%~dp0"
 
 REM venvディレクトリの存在確認
 if not exist "venv" (
-    echo [エラー] venvディレクトリが見つかりません
-    echo Python仮想環境を作成してください
-    echo python -m venv venv
-    pause
-    exit /b 1
+    echo venvディレクトリが見つかりません
+    echo 自動的にPython仮想環境を作成します...
+    echo.
+    
+    REM Pythonのバージョンチェック
+    python --version >nul 2>&1
+    if %ERRORLEVEL% neq 0 (
+        echo [エラー] Pythonがインストールされていないか、PATHに設定されていません
+        echo Python 3.10以上をインストールしてから再度実行してください
+        pause
+        exit /b 1
+    )
+    
+    REM 仮想環境の作成
+    echo 仮想環境を作成しています...
+    python -m venv venv
+    if %ERRORLEVEL% neq 0 (
+        echo [エラー] 仮想環境の作成に失敗しました
+        echo Pythonのインストール状態を確認してください
+        pause
+        exit /b 1
+    )
+    echo 仮想環境が正常に作成されました
+    echo.
 )
 
 REM venvのactivateスクリプトの存在確認
