@@ -48,9 +48,34 @@ def extract_page_images_from_pdf(pdf_path):
         return []
 
 def convert_and_zip(file_obj, url_input):
-    md = MarkItDown(enable_plugins=False)
     markdown_content = ""
     output_files = {} # filename: content (bytes)
+    
+    # 画像ファイルの場合はLLMを使用するか確認
+    file_extension = None
+    if file_obj:
+        file_path = file_obj.name
+        file_extension = os.path.splitext(file_path)[1].lower()
+    
+    # MarkItDownの初期化（画像ファイルの場合はLLMを使用）
+    if file_obj and file_extension in ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp']:
+        try:
+            from openai import OpenAI
+            client = OpenAI()
+            md = MarkItDown(llm_client=client, llm_model="gpt-4o", enable_plugins=False)
+            warning_message = "⚠️ 警告: 画像ファイルが検出されました\n"
+            warning_message += "画像ファイルはLLM（OpenAI GPT-4oなど）に送信され、画像の説明が生成されます\n"
+            warning_message += "プライバシーに配慮が必要な画像の場合は変換を中止してください\n\n"
+            warning_message += "LLMを使用して画像の説明を生成します...\n\n"
+        except ImportError:
+            warning_message = "OpenAIパッケージがインストールされていません。通常の変換を行います。\n\n"
+            md = MarkItDown(enable_plugins=False)
+        except Exception as e:
+            warning_message = f"LLMの初期化に失敗しました: {e}。通常の変換を行います。\n\n"
+            md = MarkItDown(enable_plugins=False)
+    else:
+        md = MarkItDown(enable_plugins=False)
+        warning_message = ""
 
     if file_obj:
         # Handle file upload
@@ -66,6 +91,11 @@ def convert_and_zip(file_obj, url_input):
         # Convert to markdown
         result = md.convert(file_path, keep_data_uris=True)
         markdown_content = result.text_content
+        
+        # 警告メッセージをMarkdownの先頭に追加
+        if warning_message:
+            markdown_content = warning_message + markdown_content
+            
         output_files[f"{file_basename}.md"] = markdown_content.encode('utf-8')
         
         # Add PDF images to output and insert image references at the end of each page
