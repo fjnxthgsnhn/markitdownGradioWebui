@@ -495,7 +495,7 @@ def convert_and_zip(file_obj, url_input, gemini_api_key, selected_model):
 # Note: .zip is for input, not output. Audio types are inferred.
 ACCEPTED_FILE_TYPES = [
     ".csv", ".doc", ".docx", ".epub", ".html", ".htm", ".jpeg", ".jpg", ".png", ".gif", ".bmp", ".webp",
-    ".ipynb", ".msg", ".pdf", ".ppt", ".pptx", ".txt", ".text", ".xlsx", ".xls", ".zip",
+    ".ipynb", ".msg", ".eml", ".pdf", ".ppt", ".pptx", ".txt", ".text", ".xlsx", ".xls", ".zip",
     ".mp3", ".wav", ".ogg", ".flac", ".aac" # Common audio formats
 ]
 

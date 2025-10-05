@@ -134,16 +134,39 @@ class OutlookMsgConverter(DocumentConverter):
         try:
             if msg.exists(stream_path):
                 data = msg.openstream(stream_path).read()
-                # Try UTF-16 first (common for .msg files)
-                try:
-                    return data.decode("utf-16-le").strip()
-                except UnicodeDecodeError:
-                    # Fall back to UTF-8
+                
+                # Check for common encodings in order of likelihood
+                encodings = ['utf-8', 'utf-16-le', 'shift_jis', 'cp932', 'iso-2022-jp']
+                
+                for encoding in encodings:
                     try:
-                        return data.decode("utf-8").strip()
+                        decoded = data.decode(encoding)
+                        # Check if the decoded text contains valid Japanese characters
+                        if self._contains_japanese_text(decoded):
+                            return decoded.strip()
+                        # If no Japanese characters but decoding succeeded, still use it
+                        return decoded.strip()
                     except UnicodeDecodeError:
-                        # Last resort - ignore errors
-                        return data.decode("utf-8", errors="ignore").strip()
+                        continue
+                
+                # Last resort - try with common encodings ignoring errors
+                for encoding in ['utf-8', 'shift_jis', 'cp932']:
+                    try:
+                        return data.decode(encoding, errors='ignore').strip()
+                    except UnicodeDecodeError:
+                        continue
+                
+                # Final fallback
+                return data.decode('utf-8', errors='ignore').strip()
         except Exception:
             pass
         return None
+
+    def _contains_japanese_text(self, text: str) -> bool:
+        """Check if text contains Japanese characters."""
+        import re
+        # Japanese character ranges in Unicode
+        japanese_pattern = re.compile(
+            r'[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FFF\uFF65-\uFF9F]'
+        )
+        return bool(japanese_pattern.search(text))
